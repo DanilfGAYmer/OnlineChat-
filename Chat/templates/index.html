@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мессенджер с регистрацией</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+        }
+        #auth-container {
+            width: 400px;
+            background-color: white;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        #chat-container {
+            width: 400px;
+            height: 500px;
+            background-color: white;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+        #messages {
+            height: 400px;
+            overflow-y: auto;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+        }
+        #input-container {
+            display: flex;
+            margin-top: 10px;
+        }
+        #input-container input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        #input-container button {
+            padding: 10px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin-left: 10px;
+        }
+        .auth-form input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .auth-form button {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        .auth-form .toggle-link {
+            margin-top: 10px;
+            display: block;
+            text-align: center;
+            color: #007bff;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Контейнер для регистрации и авторизации -->
+<div id="auth-container">
+    <div id="login-form" class="auth-form">
+        <h2>Вход</h2>
+        <input type="text" id="login-username" placeholder="Введите логин">
+        <input type="password" id="login-password" placeholder="Введите пароль">
+        <button onclick="login()">Войти</button>
+        <span class="toggle-link" onclick="toggleForms()">Нет аккаунта? Регистрация</span>
+    </div>
+    <div id="register-form" class="auth-form" style="display:none;">
+        <h2>Регистрация</h2>
+        <input type="text" id="reg-username" placeholder="Введите логин">
+        <input type="password" id="reg-password" placeholder="Введите пароль">
+        <button onclick="register()">Зарегистрироваться</button>
+        <span class="toggle-link" onclick="toggleForms()">Уже зарегистрированы? Войти</span>
+    </div>
+</div>
+
+<!-- Контейнер чата -->
+<div id="chat-container">
+    <div id="messages"></div>
+    <div id="input-container">
+        <input type="text" id="message-input" placeholder="Введите сообщение...">
+        <button onclick="sendMessage()">Отправить</button>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+<script>
+    const socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
+    let username = null;
+
+    const authContainer = document.getElementById('auth-container');
+    const chatContainer = document.getElementById('chat-container');
+    const messagesDiv = document.getElementById('messages');
+    const messageInput = document.getElementById('message-input');
+
+    // Переключение между формами входа и регистрации
+    function toggleForms() {
+        const registerForm = document.getElementById('register-form');
+        const loginForm = document.getElementById('login-form');
+        if (registerForm.style.display === 'none') {
+            registerForm.style.display = 'block';
+            loginForm.style.display = 'none';
+        } else {
+            registerForm.style.display = 'none';
+            loginForm.style.display = 'block';
+        }
+    }
+
+    // Регистрация пользователя
+    function register() {
+        const regUsername = document.getElementById('reg-username').value;
+        const regPassword = document.getElementById('reg-password').value;
+        socket.emit('register', {username: regUsername, password: regPassword});
+    }
+
+    // Вход пользователя
+    function login() {
+        const loginUsername = document.getElementById('login-username').value;
+        const loginPassword = document.getElementById('login-password').value;
+        socket.emit('login', {username: loginUsername, password: loginPassword});
+    }
+
+    // Обработка сообщений чата
+    socket.on('message', (msg) => {
+        const p = document.createElement('p');
+        p.innerText = msg;
+        messagesDiv.appendChild(p);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    });
+
+    // Обработка успешного входа
+    socket.on('login_success', (user) => {
+        username = user;
+        authContainer.style.display = 'none'; // Скрываем форму авторизации
+        chatContainer.style.display = 'block'; // Показываем чат
+    });
+
+    // Загрузка истории чата
+    socket.on('chat_history', (history) => {
+        history.forEach((msg) => {
+            const p = document.createElement('p');
+            p.innerText = msg;
+            messagesDiv.appendChild(p);
+        });
+        messagesDiv.scrollTop = messagesDiv.scrollHeight; // Прокрутка вниз
+    });
+
+    // Обработка ошибки входа
+    socket.on('login_error', (error) => {
+        alert(error); // Показываем ошибку пользователю
+    });
+
+    // Отправка сообщений
+    function sendMessage() {
+        const message = `${username}: ${messageInput.value}`;
+        if (messageInput.value.trim() !== "") { // Проверка на пустое сообщение
+            socket.send(message);
+            messageInput.value = ''; // Очищаем поле ввода после отправки
+        }
+    }
+
+    // Обработка отправки сообщений при нажатии Enter
+    messageInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            sendMessage();
+        }
+    });
+
+</script>
+
+</body>
+</html>
